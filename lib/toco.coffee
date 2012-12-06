@@ -1,37 +1,52 @@
 coffee = require 'coffee-script'
+colors = require 'colors'
 
+{ EventEmitter } = require 'events'
+
+Reporters =
+    default: require './reporters/default'
+
+# Test suite
 class Suite
     constructor: (@title) ->
         @tests = []
         @setup = []
+        @reporter = Reporters.default
+
     run: ->
-        passed = 0
-        failed = 0
+        @passed = 0
+        @failed = 0
+        @results = []
         if @setup.length
             eval.call null, coffee.compile @setup.join("\n"), { bare: true }
-        console.log()
         for test in @tests
-            result = test.run()
-            if result then passed++ else failed++
-            if result instanceof Error
-                console.log "✗ #{test.title}"
-                console.log result
-            else
-                console.log "#{if result then '✓' else '✗'} #{test.title}"
-        console.log "\n#{passed} tests passed, #{failed} failed\n"
-        
+            start = Date.now()
+            test.run (err, ok) =>
+                if err or ok is false then @failed++ else @passed++
+                result = err or ok ? true
+                end = Date.now()
+                @results.push [result, end-start]
+                if @passed + @failed is @tests.length
+                    @reporter.call @
+
+# Unit test
 class Test
     constructor: (@title) ->
         @code = []
-    run: ->
+
+    run: (done) ->
         result = undefined
         try
             result = eval.call null, coffee.compile @code.join("\n"), { bare: true }
-        catch e
-            result = e
-        finally
-            return result
+            unless typeof result is 'function'
+                return done null, result
+            else
+                try result = result.call null, done
+                catch err then done err
+        catch err
+            done err
 
+# Parses a spec file, returns a `Suite`
 parse = (source) ->
 
     suites = []
@@ -41,7 +56,7 @@ parse = (source) ->
     lines = source.split /[\r\n]+/
     
     for line in lines
-        continue unless line = line.trim()
+        continue unless line.trim()
 
         # Start a new test suite.
         if line[0..1] is '# '
@@ -61,11 +76,9 @@ parse = (source) ->
                 
     suites.push currentSuite if currentSuite?
     return suites
-            
-file = process.argv[2]
 
-suites = parse require('fs').readFileSync(file).toString()
+Toco = (code) ->
+    suites = parse code
+    suite.run() for suite in suites
 
-#console.log suites
-
-suites[0].run()
+module.exports = Toco

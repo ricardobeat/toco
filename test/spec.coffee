@@ -1,5 +1,9 @@
 # Bacon
 bacon = 'delicious'
+pan = {
+    fry: (n, cb) ->
+        setTimeout cb, +n or 0
+}
 
 ## Is good
 bacon is 'good'
@@ -8,5 +12,4 @@ bacon is 'good'
 bacon is 'delicious'
 
 ## Is asynchronous
-(done) -> bacon.fry done
-
+(done) -> pan.fry 500, done
